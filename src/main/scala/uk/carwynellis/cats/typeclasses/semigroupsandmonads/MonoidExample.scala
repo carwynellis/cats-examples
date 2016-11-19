@@ -1,4 +1,4 @@
-package uk.carwynellis.cats.typeclasses
+package uk.carwynellis.cats.typeclasses.semigroupsandmonads
 
 import cats._
 import cats.implicits._

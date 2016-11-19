@@ -14,7 +14,7 @@ import cats.implicits._
   * For example, multiplication and addition are associative, whereas
   * subtraction is not.
   *
-  * See - http://typelevel.org/cats/typeclasses/semigroup.html
+  * See http://typelevel.org/cats/typeclasses/semigroup.html
   */
 object SemigroupExample extends App {
 

@@ -1,6 +1,8 @@
 package uk.carwynellis.cats.typeclasses.functors
 
 import cats._
+import cats.data.Nested
+
 import language.postfixOps
 
 /**
@@ -42,4 +44,29 @@ object ApplyExample extends App {
   assert(Apply[Option].map(Some(1))(double) contains 2 )
 
   assert(Apply[Option].map(None)(double) isEmpty)
+
+  // Like Functors, Apply instances also compose, via the Nested type.
+  val listOption = Nested[List, Option, Int](List(Some(1), None, Some(3)))
+
+  val plusOne = (x: Int) => x + 1
+
+  val f = Nested[List, Option, Int => Int](List(Some(plusOne)))
+
+  assert(Apply[Nested[List, Option, ?]].ap(f)(listOption)
+    == Nested[List, Option, Int](List(Some(2), None, Some(4))))
+
+  // In addition to map from Functor, Apply provides the ap function.
+  // Compare the ap invocation below with that of map above.
+  // This highlights the difference in types between ap and map.
+  // ap describes a transformation of F[A => B] hence below, we define
+  // Some(function) which is applied to an option.
+  assert(Apply[Option].ap(Some(intToString))(Some(1)) contains "1")
+
+  assert(Apply[Option].ap(Some(double))(Some(1)) contains 2)
+
+  assert(Apply[Option].ap(Some(double))(None) isEmpty)
+
+  assert(Apply[Option].ap(None)(Some(1)) isEmpty)
+
+  assert(Apply[Option].ap(None)(None) isEmpty)
 }

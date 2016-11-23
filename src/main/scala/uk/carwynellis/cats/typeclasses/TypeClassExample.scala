@@ -7,7 +7,7 @@ package uk.carwynellis.cats.typeclasses
   */
 
 /**
-  * A type class to provide textual representation
+  * A type class to provide some context
   */
 trait Show[A] {
   def show(f: A): String

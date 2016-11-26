@@ -1,11 +1,10 @@
 package uk.carwynellis.cats.typeclasses.functors
 
-import cats._
-import cats.implicits._
-import cats.Semigroup
 import cats.data.Validated.{Invalid, Valid}
-import cats.data.{NonEmptyList, OneAnd, Validated, ValidatedNel}
+import cats.data._
+import cats.implicits._
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 /**
@@ -43,7 +42,9 @@ object TraverseExample extends App {
 
   // Now we have a simple function for fetching a user profile, it can be used
   // to fetch profiles for a list of users via map.
-  def getUserProfiles(users: List[User]): List[Future[Profile]] = users map { getUserProfile }
+  def getUserProfiles(users: List[User]): List[Future[Profile]] = users map {
+    getUserProfile
+  }
 
   // However the result is a List of Future which is awkward to work with.
   // Future provides a traverse method which takes a List[Future[_]] and
@@ -64,8 +65,8 @@ object TraverseExample extends App {
   // See http://typelevel.org/blog/2013/09/11/using-scalaz-Unapply.html
 
   def parseIntEither(s: String): Either[NumberFormatException, Int] =
-    // catchOnly is provided by cats implicits and is implemented in
-    // EitherObjectOps.
+  // catchOnly is provided by cats implicits and is implemented in
+  // EitherObjectOps.
     Either.catchOnly[NumberFormatException](s.toInt)
 
   def parseIntValidated(s: String): ValidatedNel[NumberFormatException, Int] =
@@ -108,7 +109,53 @@ object TraverseExample extends App {
   // In both cases the behaviour of the traversal is closely related to the
   // Applicative behaviour of type.
 
+  // The Reader applicative can also be used with travseral.
 
+  trait Context
+  trait Topic
+  trait Result
 
+  type Job[A] = Reader[Context, A]
+
+  def processTopic(topic: Topic): Job[Result] = ???
+
+  // Since Reader has an Applicative instance we can traverse over a list of
+  // topics with processTopic as follows.
+  def processTopics(topics: List[Topic]): Job[List[Result]] =
+  topics.traverse(processTopic)
+
+  // We now have one aggregate job that encapsulates some processing to be
+  // applied to a list of topics. Note that we must provide a Context in order
+  // to obtain a result.
+
+  // A practical example of a context could be a SparkContext which determines
+  // where a spark job runs.
+
+  // In cases where traversal of data is over values already within an effect,
+  // for example over a List[Option[A]], and an Option[List[A]] is more
+  // convenient, you could traverse the list with the identity function as
+  // follows.
+  assert(List(Option(1), Option(2), Option(3)).traverse(identity) == Some(List(1,2,3)))
+
+  // However, traverse also provides sequence which does just this.
+  assert(List(Option(1), Option(2), Option(3)).sequence == Some(List(1,2,3)))
+
+  // Sometimes we may wish to traverse with a side-effecting function that
+  // returns Unit.
+  trait Record
+
+  def writeToStore(record: Record): Future[Unit] = ???
+
+  // However traversing with this function leads to unwieldly types...
+  def writeManyToStore(records: List[Record]): Future[List[Unit]] =
+    records.traverse(writeToStore)
+
+  // A Future[List[Unit]] provides no more information than a Future[Unit].
+
+  // Traversing for effect where the result of the function is not of interest
+  // is a common use case, so Foldable, a superclass of Traverse also provides
+  // traverse_ and sequence_ which ignore any results and simply return Unit.
+  def writeManyToStoreWithFoldable(records: List[Record]): Future[Unit] =
+    records.traverse_(writeToStore)
 
 }

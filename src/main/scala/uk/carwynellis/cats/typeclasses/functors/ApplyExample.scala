@@ -7,7 +7,7 @@ import cats.syntax.cartesian._
 import language.postfixOps
 
 /**
-  * Apply extends the Functor typeclass with a new function, ap.
+  * Apply extends the Functor type class with a new function, ap.
   *
   * ap is similar to map, in that we are transforming a value within a context
   * such as Option, List, i.e. the F in F[A].

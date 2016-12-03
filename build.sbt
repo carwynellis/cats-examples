@@ -4,6 +4,8 @@ version := "1.0"
 
 scalaVersion := "2.11.8"
 
+scalacOptions ++= Seq("-feature", "-deprecation")
+
 libraryDependencies += "org.typelevel" %% "cats" % "0.8.1"
 
 resolvers += Resolver.sonatypeRepo("releases")

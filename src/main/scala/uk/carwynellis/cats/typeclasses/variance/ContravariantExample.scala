@@ -7,7 +7,7 @@ import cats.implicits._
 import scala.math.Ordered._
 
 /**
-  * The Contravariant type class is for functions that define a contramap with
+  * The Contravariant type class is for functors that define a contramap with
   * the following type
   *
   *   def contramap[A,B](fa: F[A])(f: B => A): F[B]

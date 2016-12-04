@@ -2,8 +2,10 @@ package uk.carwynellis.cats.typeclasses
 
 import cats._
 import cats.implicits._
+import cats.data.Nested
 
 import scala.language.postfixOps
+import scala.util.Try
 
 /**
   * Foldable type classes can be defined for data structures that can be folded
@@ -25,8 +27,8 @@ import scala.language.postfixOps
   */
 object FoldableExample extends App {
 
-  // Foldable provides a number of methods which are shown in the examples
-  // below.
+  // The foldLeft and foldRight methods form the basis for many useful
+  // operations as shown in the examples below.
 
   assert(Foldable[List].fold(List("a", "b", "c")) == "abc")
 
@@ -80,4 +82,79 @@ object FoldableExample extends App {
   assert(Foldable[Option].toList(Option(1)) == List(1))
 
   assert(Foldable[Option].toList(None) == List.empty)
+
+  def parseInt(s: String): Option[Int] = Try(Integer.parseInt(s)).toOption
+
+  // traverse_ traverse F[A] using Applicative[G]. A values will be mapped into
+  // G[B] and combined using map2 from Applicative. Primarily useful where the
+  // side-effect of G[_] is needed since the result is discarded and G[Unit] is
+  // returned.
+  // So in the following example the result of parseInt is discarded and
+  // success indicated by the result, some unit.
+  assert(Foldable[List].traverse_(List("1", "2"))(parseInt) contains (()))
+
+  // If parsing fails then this results in None being returned.
+  assert(Foldable[List].traverse_(List("1", "A"))(parseInt) isEmpty)
+
+  // sequence_ behaves in a similar manner when sequencing over nested types.
+  assert(Foldable[List].sequence_(List(Option(1), Option(2))) contains (()))
+
+  assert(Foldable[List].sequence_(List(Option(1), None)) isEmpty)
+
+  assert(Foldable[List].dropWhile_(List(1,2,3,4,5))(_ < 4) == List(4,5))
+
+  // Examples of folding over nested types.
+  val listOption1 = Nested(List(Option(1), Option(2), Option(3)))
+  val listOption2 = Nested(List(Option(1), Option(2), None))
+
+  assert(Foldable[Nested[List, Option, ?]].fold(listOption1) == 6)
+
+  assert(Foldable[Nested[List, Option, ?]].fold(listOption2) == 3)
+
+  // Thus when defining some new data structure, if we can define foldLeft and
+  // foldRight methods, we are able to provide many other useful operations,
+  // if not the most efficient implementations, without further work.
+
+  // Note that in order to support laziness, the signature of Foldable's
+  // foldRight is
+  //
+  // def foldRight[A, B](fa: F[A], lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B]
+  //
+  // as opposed to
+  //
+  // def foldRight[A, B](fa: F[A], z: B)(f: (A, B) => B): B
+  //
+  // which someone familiar with foldRight from collections in the scala
+  // standard library might expect.
+  //
+  // This prevents structures which are lazy in their right hand argument from
+  // being eagerly evaluated.
+
+  // For example consider the following infinite stream of false values
+
+  val allFalse = Stream.continually(false)
+
+  // If we wanted to reduce this stream into a single false value using the
+  // logical &&, we know that we do not need to consider the entire stream to
+  // arrive at a false value.
+
+  // Using the foldRight method provided by the standard library will attempt
+  // to evaluate the entire stream, resulting in a stack overflow.
+
+  try {
+    allFalse.foldRight(true)(_ && _)
+  }
+  catch {
+    case e: StackOverflowError => println(s"Caught expected stack overflow")
+  }
+
+  // However with the lazy foldRight from Foldable evaluation will stop after
+  // examining only the first value.
+
+  assert(
+    Foldable[Stream].foldRight(allFalse, Eval.True) { (a,b) =>
+      if (a) b
+      else Eval.now(false)
+    }.value == false
+  )
 }

@@ -38,4 +38,26 @@ object MonoidKExample extends App {
 
   assert(MonoidK[List].empty[Int] == List.empty[Int])
 
+  // And instead of combine it has combineK which takes an additional type
+  // parameter.
+  assert(Monoid[List[Int]].combine(List(1,2), List(3,4)) == List(1,2,3,4))
+
+  assert(MonoidK[List].combineK[Int](List(1,2), List(3,4)) == List(1,2,3,4))
+
+  assert(
+    MonoidK[List].combineK[String](List("a", "b"), List("c", "d"))
+      == List("a", "b", "c", "d")
+  )
+
+  // In most cases scala is able to infer the type so the explicit type
+  // parameter can be ommitted.
+  assert(MonoidK[List].combineK(List(1,2), List(3,4)) == List(1,2,3,4))
+
+  assert(
+    MonoidK[List].combineK(List("a", "b"), List("c", "d"))
+      == List("a", "b", "c", "d")
+  )
+
+  // MonoidK extends SemigroupK so refer to the SemigroupK documentation for
+  // futher examples.
 }

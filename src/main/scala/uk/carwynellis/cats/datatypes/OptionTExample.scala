@@ -44,6 +44,14 @@ object OptionTExample extends App {
   // that look like those on Option, but which handle the outer map call on
   // the Future for us.
 
+  val greetingT: OptionT[Future, String] = OptionT(greeting)
+
+  val excitedGreeting2 = greetingT.map(_ + "!")
+
+  val hasWelcome2 = greetingT.filter(_.contains("Welcome"))
+
+  val withFallback2 = greetingT.getOrElse("Hello there!")
+
   // From Option[A] and/or F[A] to OptionT[F, A]
 
   // Sometimes you may have an Option[A] and, or an F[A] and want to lift them
@@ -63,4 +71,44 @@ object OptionTExample extends App {
   } yield s"$g $f $l"
 
   assert(Await.result(ot.value, 1 second) contains "Hello Jane Doe")
+
+  // From A to OptionT[F,A]
+
+  // If you only have an A and you wish to lift it into an Option[F,A],
+  // assuming you have an applicative instance for F, you can use some which is
+  // an alias for pure. There is also a none method which can be used to create
+  // an OptionT where the Option wrapped A is actually a None.
+
+  val greet: OptionT[Future, String] = OptionT.pure("Hola!")
+
+  val greetAlt: OptionT[Future, String] = OptionT.some("Hi!")
+
+  val emptyGreet: OptionT[Future, String] = OptionT.none
+
+  // Beyond map
+
+  // Sometimes the operation you want to perform on a Future[Option[String]]
+  // might not be as simple as just wrapping the Option method in a Future.map.
+  // For example what if we need to fallback to a default greeting if no value
+  // exists? Without OptionT this might look like
+
+  val defaultGreeting: Future[String] = Future.successful("Welcome")
+
+  val greetingWithFallback: Future[String] =
+    greeting.flatMap { g: Option[String] =>
+      g.map(Future.successful).getOrElse(defaultGreeting)
+    }
+
+  // We can't make use of the getOrElse method on OptionT because it takes a
+  // default value of type A instead of a Future[A]. However the getOrElseF
+  // method does exactly what we want in this instance.
+
+  val greetingWithFallback2: Future[String] =
+    greetingT.getOrElseF(defaultGreeting)
+
+  // Getting to the underlying instance
+
+  // To retrieve the F[Option[A]] from an OptionT call value.
+
+  val greetingValue: Future[Option[String]] = greetingT.value
 }

@@ -16,7 +16,7 @@ import scala.language.higherKinds
   *
   *   http://typelevel.org/cats/datatypes/const.html
   *   http://functional-wizardry.blogspot.co.uk/2014/02/lens-implementation-part-1.html
-  *
+  *   https://www.cs.ox.ac.uk/jeremy.gibbons/publications/iterator.pdf
   */
 object ConstExample extends App {
 
@@ -186,5 +186,131 @@ object ConstExample extends App {
   // has a Functor instance, it can only map over the Const which will do
   // nothing to the stored value. After modifyF is done getting the new S, we
   // retrieve the stored A value and we’re done!
+
+  // Example 2 - Traverse
+
+  // In the popular The Essence of the Iterator Pattern paper, Jeremy Gibbons
+  // and Bruno C. d. S. Oliveria describe a functional approach to iterating
+  // over a collection of data. Among the abstractions presented are Foldable
+  // and Traverse, replicated below (also available in Cats).
+
+  trait Foldable[F[_]] {
+
+    // Given a collection of data F[A], and a function mapping each A to a B
+    // where B has a Monoid instance, reduce the collection down to a single B
+    // value using the monoidal behavior of B
+    def foldMap[A, B : Monoid](fa: F[A])(f: A => B): B
+
+  }
+
+  trait Traverse[F[_]] {
+
+    // Given a collection of data F[A], for each value apply the function f
+    // which returns an effectful value. The result of traverse is the
+    // composition of all these effectful values.
+    def traverse[G[_] : Applicative, A, B](fa: F[A])(f: A => G[B]): G[F[B]]
+
+  }
+
+  // These two type classes seem unrelated - one reduces a collection down to a
+  // single value, the other traverses a collection with an effectful function,
+  // collecting results. It may be surprising to see that in fact Traverse
+  // subsumes Foldable.
+
+  trait Traverse2[F[_]] extends Foldable[F] {
+
+    def traverse[G[_] : Applicative, A, X](fa: F[A])(f: A => G[X]): G[F[X]]
+
+    def foldMap[A, B : Monoid](fa: F[A])(f: A => B): B
+
+  }
+
+  // To start, we observe that if we are to implement foldMap in terms of
+  // traverse, we will want a B out at some point. However, traverse returns a
+  // G[F[X]]. It would seem there is no way to unify these two. However, if we
+  // imagine G[_] to be a sort of type-level constant function, where the fact
+  // that it’s taking a F[X] is irrelevant to the true underlying value, we can
+  // begin to see how we might be able to pull this off.
+
+  // traverse however wants G[_] to have an Applicative instance, so let’s
+  // define one for Const. Since F[X] is the value we want to ignore, we treat
+  // it as the second type parameter and hence, leave it as the free one.
+
+  /**
+
+    implicit def constApplicative[Z]: Applicative[Const[Z, ?]] =
+      new Applicative[Const[Z, ?]] {
+        def pure[A](a: A): Const[Z, A] = ???
+
+        def ap[A, B](f: Const[Z, A => B])(fa: Const[Z, A]): Const[Z, B] = ???
+    }
+
+  **/
+
+  // Recall that Const[Z, A] means we have a Z value in hand, and don’t really
+  // care about the A type parameter. Therefore we can more or less treat the
+  // type Const[Z, A] as just Z.
+
+  // In functions pure and ap we have a problem. In pure, we have an A value,
+  // but want to return a Z value. We have no function A => Z, so our only
+  // option is to completely ignore the A value. But we still don’t have a Z!
+  // Let’s put that aside for now, but still keep it in the back of our minds.
+
+  // In ap we have two Z values, and want to return a Z value. We could
+  // certainly return one or the other, but we should try to do something more
+  // useful. This suggests composition of Zs, which we don’t know how to do.
+
+  // So now we need a constant Z value, and a binary function that takes two Zs
+  // and produces a Z. Sound familiar? We want Z to have a Monoid instance!
+
+  implicit def constApplicative[Z : Monoid]: Applicative[Const[Z, ?]] =
+    new Applicative[Const[Z, ?]] {
+      def pure[A](a: A): Const[Z, A] = Const(Monoid[Z].empty)
+
+      def ap[A, B](f: Const[Z, A => B])(fa: Const[Z, A]): Const[Z, B] =
+        Const(Monoid[Z].combine(fa.getConst, f.getConst))
+    }
+
+  // We have our Applicative!
+
+  // Going back to Traverse, we fill in the first parameter of traverse with fa
+  // since that’s the only value that fits.
+
+  // Now we need a A => G[B]. We have an A => B, and we’ve decided to use Const
+  // for our G[_]. We need to fix the first parameter of Const since Const takes
+  // two type parameters and traverse wants a type constructor which only takes
+  // one. The first type parameter which will be the type of the actual values
+  // we store, and therefore will be the type of the value we get out at the
+  // end, so we leave the second one free, similar to the Applicative instance.
+  // We don’t care about the second type parameter and there are no restrictions
+  // on it, so we can just use Nothing, the type that has no values.
+
+  // So to summarize, what we want is a function A => Const[B, Nothing], and we
+  // have a function A => B. Recall that Const[B, Z] (for any Z) is the moral
+  // equivalent of just B, so A => Const[B, Nothing] is equivalent to A => B,
+  // which is exactly what we have, we just need to wrap it.
+
+  trait Traverse3[F[_]] extends Foldable[F] {
+    def traverse[G[_] : Applicative, A, X](fa: F[A])(f: A => G[X]): G[F[X]]
+
+    def foldMap[A, B : Monoid](fa: F[A])(f: A => B): B = {
+      val const: Const[B, F[Nothing]] = traverse[Const[B, ?], A, Nothing](fa)(a => Const(f(a)))
+      const.getConst
+    }
+  }
+
+  // Hurrah!
+
+  // What’s happening here? We can see traverse is a function that goes over a
+  // collection, applying an effectful function to each value, and combining all
+  // of these effectful values. In our case, the effect is mapping each value to
+  // a value of type B, where we know how to combine Bs via its Monoid instance.
+  // The Monoid instance is exactly what is used when traverse goes to collect
+  // the effectful values together. Should the F[A] be “empty”, it can use
+  // Monoid#empty as a value to return back.
+
+  // Pretty nifty. traverse-ing over a collection with an effectful function is
+  // more general than traversing over a collection to reduce it down to a
+  // single value.
 
 }

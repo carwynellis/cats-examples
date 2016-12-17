@@ -22,13 +22,17 @@ import scala.annotation.tailrec
   */
 object EitherExample extends App {
 
-  def throwsSomeStuff: Int => Double = ???
+  object InitialExample {
+    def throwsSomeStuff: Int => Double = ???
 
-  def throwsOtherThings: Double => String = ???
+    def throwsOtherThings: Double => String = ???
 
-  def moreThrowing: String => List[Char] = ???
+    def moreThrowing: String => List[Char] = ???
 
-  def magic = throwsSomeStuff.andThen(throwsOtherThings).andThen(moreThrowing)
+    def magic = throwsSomeStuff
+      .andThen(throwsOtherThings)
+      .andThen(moreThrowing)
+  }
 
   // Assume we happily throw exceptions in our code.  Looking at the types, any
   // of those functions can throw any number of exceptions, we don’t know. When
@@ -157,24 +161,26 @@ object EitherExample extends App {
   // Now, using combinators like flatMap and map, we can compose our functions
   // together.
 
-  import EitherStyle._
+  {
+    import EitherStyle._
 
-  def magic2(s: String): Either[Exception, String] =
-    parse(s).flatMap(reciprocal).map(stringify)
+    def magic(s: String): Either[Exception, String] =
+      parse(s).flatMap(reciprocal).map(stringify)
 
-  // With the composite function that we actually care about, we can pass in
-  // strings and then pattern match on the exception. Because Either is a sealed
-  // type (often referred to as an algebraic data type, or ADT), the compiler
-  // will complain if we do not check both the Left and Right case.
+    // With the composite function that we actually care about, we can pass in
+    // strings and then pattern match on the exception. Because Either is a
+    // sealed type (often referred to as an algebraic data type, or ADT), the
+    // compiler will complain if we do not check both the Left and Right case.
 
-  lazy val result = magic2("100") match {
-    case Left(_: NumberFormatException) => "not a number!"
-    case Left(_: IllegalArgumentException) => "can't take reciprocal of 0!"
-    case Left(_) => "got unknown exception"
-    case Right(s) => s"Got reciprocal: $s"
+    lazy val result = magic("100") match {
+      case Left(_: NumberFormatException) => "not a number!"
+      case Left(_: IllegalArgumentException) => "can't take reciprocal of 0!"
+      case Left(_) => "got unknown exception"
+      case Right(s) => s"Got reciprocal: $s"
+    }
+
+    assert(result == "Got reciprocal: 0.01")
   }
-
-  assert(result == "Got reciprocal: 0.01")
 
   // Not bad - if we leave out any of those clauses the compiler will yell at
   // us, as it should. However, note the Left(_) clause - the compiler will
@@ -184,4 +190,140 @@ object EitherExample extends App {
   // inspection of the source that those will be the only exceptions thrown, so
   // it seems strange to have to account for other exceptions. This implies
   // that there is still room to improve.
+
+  // Example usage: Round 2
+
+  // Instead of using exceptions as our error value, let’s instead enumerate
+  // explicitly the things that can go wrong in our program.
+
+  object EitherStyle2 {
+    sealed abstract class Error
+    final case class NotANumber(string: String) extends Error
+    final case object NoZeroReciprocal extends Error
+
+    def parse(s: String): Either[Error, Int] =
+      if (s.matches("-?[0-9]+")) Either.right(s.toInt)
+      else Either.left(NotANumber(s))
+
+    def reciprocal(i: Int): Either[Error, Double] =
+      if (i == 0) Either.left(NoZeroReciprocal)
+      else Either.right(1.0 / i)
+
+    def stringify(d: Double): String = d.toString
+
+    def magic(s: String): Either[Error, String] =
+      parse(s).flatMap(reciprocal).map(stringify)
+  }
+
+  // For our little module, we enumerate any and all errors that can occur.
+  // Then, instead of using exception classes as error values, we use one of the
+  // enumerated cases. Now when we pattern match, we get much nicer matching.
+  // Moreover, since Error is sealed, no outside code can add additional
+  // subtypes which we might fail to handle.
+
+  {
+    import EitherStyle2._
+
+    val result = magic("100") match {
+      case Left(NotANumber(_)) => "not a number!"
+      case Left(NoZeroReciprocal) => "can't take reciprocal of 0!"
+      case Right(s) => s"Got reciprocal: $s"
+    }
+
+    assert(result == "Got reciprocal: 0.01")
+  }
+
+  // Either in the small, Either in the large
+
+  // Once you start using Either for all your error-handling, you may quickly
+  // run into an issue where you need to call into two separate modules which
+  // give back separate kinds of errors.
+
+  {
+    sealed abstract class DatabaseError
+    trait DatabaseValue
+
+    object Database {
+      def databaseThings(): Either[DatabaseError, DatabaseValue] = ???
+    }
+
+    sealed abstract class ServiceError
+    trait ServiceValue
+
+    object Service {
+      def serviceThings(v: DatabaseValue): Either[ServiceError, ServiceValue] =
+        ???
+    }
+  }
+
+  // Let’s say we have an application that wants to do database things, and
+  // then take database values and do service things. Glancing at the types, it
+  // looks like flatMap will do it.
+
+  /**
+    def doApp = Database.databaseThings().flatMap(Service.serviceThings)
+  **/
+
+  // If you’re on Scala 2.12, this line will compile and work as expected, but
+  // if you’re on an earlier version of Scala it won’t! This difference is
+  // related to the right-biasing of Either in Scala 2.12 that was mentioned
+  // above. In Scala 2.12 the flatMap we get here is a method on Either with
+  // this signature:
+
+  /**
+    def flatMap[AA >: A, Y](f: (B) => Either[AA, Y]): Either[AA, Y]
+  **/
+
+  // This flatMap is different from the ones you’ll find on List or Option, for
+  // example, in that it has two type parameters, with the extra AA parameter
+  // allowing us to flatMap into an Either with a different type on the left
+  // side.
+
+  // This behavior is consistent with the covariance of Either, and in some
+  // cases it can be convenient, but it also makes it easy to run into nasty
+  // variance issues (such as Object being inferred as the type of the left
+  // side, as it is in this case).
+
+  // For this reason the flatMap provided by Cats’s Either syntax (which is the
+  // one you’ll get for Scala 2.10 and 2.11) does not include this extra type
+  // parameter. Instead the left sides have to match, which means our doApp
+  // definition above will not compile on versions of Scala before 2.12.
+
+  // Solution 1: Application-wide errors
+
+  // So clearly in order for us to easily compose Either values, the left type
+  // parameter must be the same. We may then be tempted to make our entire
+  // application share an error data type.
+
+  {
+    sealed abstract class AppError
+    final case object DatabaseError1 extends AppError
+    final case object DatabaseError2 extends AppError
+    final case object ServiceError1 extends AppError
+    final case object ServiceError2 extends AppError
+
+    trait DatabaseValue
+    trait ServiceValue
+
+    object Database {
+      def databaseThings(): Either[AppError, DatabaseValue] = ???
+    }
+
+    object Service {
+      def serviceThings(v: DatabaseValue): Either[AppError, ServiceValue] =
+        ???
+    }
+
+    def doApp = Database.databaseThings().flatMap(Service.serviceThings)
+  }
+
+  // This certainly works, or at least it compiles. But consider the case
+  // where another module wants to just use Database, and gets an
+  // Either[AppError, DatabaseValue] back. Should it want to inspect the errors,
+  // it must inspect all the AppError cases, even though it was only intended
+  // for Database to use DatabaseError1 or DatabaseError2.
+
+  // Solution 2: ADTs all the way down
+
+  
 }

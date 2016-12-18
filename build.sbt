@@ -6,7 +6,12 @@ scalaVersion := "2.11.8"
 
 scalacOptions ++= Seq("-feature", "-deprecation")
 
-libraryDependencies += "org.typelevel" %% "cats" % "0.8.1"
+val catsVersion = "0.8.1"
+
+libraryDependencies ++= Seq(
+    "org.typelevel" %% "cats" % catsVersion,
+    "org.typelevel" %% "cats-free" % catsVersion
+)
 
 resolvers += Resolver.sonatypeRepo("releases")
 

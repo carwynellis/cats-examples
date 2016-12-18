@@ -325,5 +325,77 @@ object EitherExample extends App {
 
   // Solution 2: ADTs all the way down
 
-  
+  // Instead of lumping all our errors into one big ADT, we can instead keep
+  // them local to each module, and have an application-wide error ADT that
+  // wraps each error ADT we need.
+
+  {
+    sealed abstract class DatabaseError
+    trait DatabaseValue
+
+    object Database {
+      def databaseThings(): Either[DatabaseError, DatabaseValue] = ???
+    }
+
+    sealed abstract class ServiceError
+    trait ServiceValue
+
+    object Service {
+      def serviceThings(v: DatabaseValue): Either[ServiceError, ServiceValue] = ???
+    }
+
+    sealed abstract class AppError
+    object AppError {
+      final case class Database(error: DatabaseError) extends AppError
+      final case class Service(error: ServiceError) extends AppError
+    }
+
+    // Now in our outer application, we can wrap/lift each module-specific
+    // error into AppError and then call our combinators as usual. Either
+    // provides a convenient method to assist with this, called Either.leftMap -
+    // it can be thought of as the same as map, but for the Left side.
+
+    def doApp: Either[AppError, ServiceValue] =
+      Database.databaseThings().leftMap[AppError](AppError.Database).
+        flatMap(dv => Service.serviceThings(dv).leftMap(AppError.Service))
+
+    // Hurrah! Each module only cares about its own errors as it should be, and
+    // more composite modules have their own error ADT that encapsulates each
+    // constituent module’s error ADT. Doing this also allows us to take action
+    // on entire classes of errors instead of having to pattern match on each
+    // individual one.
+
+    def awesome =
+      doApp match {
+        case Left(AppError.Database(_)) => "something in the database went wrong"
+        case Left(AppError.Service(_))  => "something in the service went wrong"
+        case Right(_)                   => "everything is alright!"
+      }
+  }
+
+  // Working with exception-y code
+
+  // There will inevitably come a time when your nice Either code will have to
+  // interact with exception-throwing code. Handling such situations is easy
+  // enough.
+
+  val either1: Either[NumberFormatException, Int] =
+    try {
+      Either.right("abc".toInt)
+    }
+    catch {
+      case nfe: NumberFormatException => Either.left(nfe)
+    }
+
+  // However, this can get tedious quickly. Either has a catchOnly method on its
+  // companion object (via syntax enrichment) that allows you to pass it a
+  // function, along with the type of exception you want to catch, and does the
+  // above for you.
+
+  val either2: Either[NumberFormatException, Int] =
+    Either.catchOnly[NumberFormatException]("abc".toInt)
+
+  // If you want to catch all (non-fatal) throwables, you can use catchNonFatal.
+
+  val either3: Either[Throwable, Int] = Either.catchNonFatal("abc".toInt)
 }

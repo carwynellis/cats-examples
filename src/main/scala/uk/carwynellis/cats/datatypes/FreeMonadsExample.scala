@@ -230,4 +230,139 @@ object FreeMonadsExample extends App {
   val result: Option[Int] = program.foldMap(impureCompiler)
 
   assert(result contains 14)
+
+  // 7. Use a pure compiler (optional)
+
+  // The previous examples used an effectful natural transformation. This works,
+  // but you might prefer folding your Free in a “purer” way. The State data
+  // structure can be used to keep track of the program state in an immutable
+  // map, avoiding mutation altogether.
+
+  import cats.data.State
+
+  type KVStoreState[A] = State[Map[String, Any], A]
+  val pureCompiler: KVStoreA ~> KVStoreState = new (KVStoreA ~> KVStoreState) {
+    def apply[A](fa: KVStoreA[A]): KVStoreState[A] =
+      fa match {
+        case Put(key, value) => State.modify(_.updated(key, value))
+        case Get(key) =>
+          State.inspect(_.get(key).map(_.asInstanceOf[A]))
+        case Delete(key) => State.modify(_ - key)
+      }
+  }
+
+  // (You can see that we are again running into some places where Scala’s
+  // support for pattern matching is limited by the JVM’s type erasure, but it’s
+  // not too hard to get around.)
+
+  val pureResult: (Map[String, Any], Option[Int]) =
+    program.foldMap(pureCompiler).run(Map.empty).value
+
+  assert(pureResult == (Map("wild-cats" -> 14), Some(14)))
+
+  // Composing Free monads ADTs.
+
+  // Real world applications often time combine different algebras. The Inject
+  // type class described by Swierstra in Data types à la carte lets us compose
+  // different algebras in the context of Free.
+
+  // Let’s see a trivial example of unrelated ADT’s getting composed as a
+  // Coproduct that can form a more complex program.
+
+  import cats.data.Coproduct
+  import cats.free.{Inject, Free}
+  import cats.{Id, ~>}
+  import scala.collection.mutable.ListBuffer
+
+  // Handles user interaction
+  sealed trait Interact[A]
+  case class Ask(prompt: String) extends Interact[String]
+  case class Tell(msg: String) extends Interact[Unit]
+
+  // Represents persistence operations
+  sealed trait DataOp[A]
+  case class AddCat(a: String) extends DataOp[Unit]
+  case class GetAllCats() extends DataOp[List[String]]
+
+  // Once the ADTs are defined we can formally state that a Free program is the
+  // Coproduct of it’s Algebras.
+
+  type CatsApp[A] = Coproduct[DataOp, Interact, A]
+
+  // In order to take advantage of monadic composition we use smart constructors
+  // to lift our Algebra to the Free context.
+
+  import scala.language.higherKinds
+
+  class Interacts[F[_]](implicit I: Inject[Interact, F]) {
+    def tell(msg: String): Free[F, Unit] = Free.inject[Interact, F](Tell(msg))
+    def ask(prompt: String): Free[F, String] = Free.inject[Interact, F](Ask(prompt))
+  }
+
+  object Interacts {
+    implicit def interacts[F[_]](implicit I: Inject[Interact, F]): Interacts[F] = new Interacts[F]
+  }
+
+  class DataSource[F[_]](implicit I: Inject[DataOp, F]) {
+    def addCat(a: String): Free[F, Unit] = Free.inject[DataOp, F](AddCat(a))
+    def getAllCats: Free[F, List[String]] = Free.inject[DataOp, F](GetAllCats())
+  }
+
+  object DataSource {
+    implicit def dataSource[F[_]](implicit I: Inject[DataOp, F]): DataSource[F] = new DataSource[F]
+  }
+
+  // ADTs are now easily composed and trivially intertwined inside monadic
+  // contexts.
+
+  def program2(implicit I : Interacts[CatsApp], D : DataSource[CatsApp]): Free[CatsApp, Unit] = {
+
+    import I._, D._
+
+    for {
+      cat <- ask("What's the kitty's name?")
+      _ <- addCat(cat)
+      cats <- getAllCats
+      _ <- tell(cats.toString)
+    } yield ()
+  }
+
+  // Finally we write one interpreter per ADT and combine them with a FunctionK
+  // to Coproduct so they can be compiled and applied to our Free program.
+
+  import scala.io.StdIn.readLine
+
+  object ConsoleCatsInterpreter extends (Interact ~> Id) {
+    def apply[A](i: Interact[A]) = i match {
+      case Ask(prompt) =>
+        println(prompt)
+        readLine()
+      case Tell(msg) =>
+        println(msg)
+    }
+  }
+
+  object InMemoryDatasourceInterpreter extends (DataOp ~> Id) {
+
+    private[this] val memDataSet = new ListBuffer[String]
+
+    def apply[A](fa: DataOp[A]) = fa match {
+      case AddCat(a) => memDataSet.append(a); ()
+      case GetAllCats() => memDataSet.toList
+    }
+  }
+
+  val interpreter: CatsApp ~> Id =
+    InMemoryDatasourceInterpreter or ConsoleCatsInterpreter
+
+  // Now if we run our program and type in “snuggles” when prompted, we see
+  // something like this:
+
+  val evaled: Unit = program2.foldMap(interpreter)
+
+  // What's the kitty's name?
+  // List(snuggles)
+  // evaled: Unit = ()
+
+  
 }

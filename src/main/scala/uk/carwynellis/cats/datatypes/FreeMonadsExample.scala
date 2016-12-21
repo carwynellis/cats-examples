@@ -364,5 +364,183 @@ object FreeMonadsExample extends App {
   // List(snuggles)
   // evaled: Unit = ()
 
-  
+  // For the curious ones: what is Free in theory?
+
+  // Mathematically-speaking, a free monad (at least in the programming language
+  // context) is a construction that is left adjoint to a forgetful functor
+  // whose domain is the category of Monads and whose co-domain is the category
+  // of Endofunctors. Huh?
+
+  // Concretely, it is just a clever construction that allows us to build a very
+  // simple Monad from any functor.
+
+  // The above forgetful functor takes a Monad and:
+
+  //  - forgets its monadic part (e.g. the flatMap function)
+  //  - forgets its pointed part (e.g. the pure function)
+  //  - finally keeps the functor part (e.g. the map function)
+
+  // By reversing all arrows to build the left-adjoint, we deduce that the free
+  // monad is basically a construction that:
+
+  // - takes a functor
+  // - adds the pointed part (e.g. pure)
+  // - adds the monadic behavior (e.g. flatMap)
+
+  // In terms of implementation, to build a monad from a functor we use the
+  // following classic inductive definition:
+
+  {
+    sealed abstract class Free[F[_], A]
+    case class Pure[F[_], A](a: A) extends Free[F, A]
+    case class Suspend[F[_], A](a: F[Free[F, A]]) extends Free[F, A]
+  }
+
+  // (This generalizes the concept of fixed point functor.)
+
+  // In this representation:
+
+  //  - Pure builds a Free instance from an A value (it reifies the pure
+  //    function)
+  //  - Suspend builds a new Free by applying F to a previous Free (it reifies
+  //    the flatMap function)
+
+  // So a typical Free structure might look like:
+
+  // Suspend(F(Suspend(F(Suspend(F(....(Pure(a))))))))
+
+  // Free is a recursive structure. It uses A in F[A] as the recursion
+  // “carrier” with a terminal element Pure.
+
+  // From a computational point of view, Free recursive structure can be seen as
+  // a sequence of operations.
+
+  //  - Pure returns an A value and ends the entire computation.
+  //  - Suspend is a continuation; it suspends the current computation with the
+  //    suspension functor F (which can represent a command for example) and
+  //    hands control to the caller. A represents a value bound to this
+  //    computation.
+
+  // Please note this Free construction has the interesting quality of encoding
+  // the recursion on the heap instead of the stack as classic function calls
+  // would. This provides the stack-safety we heard about earlier, allowing very
+  // large Free structures to be evaluated safely.
+
+  // For the very curious ones
+
+  // If you look at implementation in cats, you will see another member of the Free[_] ADT:
+
+  /*
+    case class FlatMapped[S[_], B, C](c: Free[S, C], f: C => Free[S, B]) extends Free[S, B]
+  */
+
+  // FlatMapped represents a call to a subroutine c and when c is finished, it
+  // continues the computation by calling the function f with the result of c.
+
+  // It is actually an optimization of Free structure allowing to solve a
+  // problem of quadratic complexity implied by very deep recursive Free
+  // computations.
+
+  // It is exactly the same problem as repeatedly appending to a List[_]. As the
+  // sequence of operations becomes longer, the slower a flatMap “through” the
+  // structure will be. With FlatMapped, Free becomes a right-associated
+  // structure not subject to quadratic complexity.
+
+  // FreeT
+
+  // Often times we want to interleave the syntax tree when building a Free
+  // monad with some other effect not declared as part of the ADT. FreeT solves
+  // this problem by allowing us to mix building steps of the AST with calling
+  // action in other base monad.
+
+  // In the following example a basic console application is shown. When the
+  // user inputs some text we use a separate State monad to track what the user
+  // typed.
+
+  // As we can observe in this case FreeT offers us a the alternative to
+  // delegate denotations to State monad with stronger equational guarantees
+  // than if we were emulating the State ops in our own ADT.
+
+  import cats.free._
+  import cats._
+  import cats.data._
+
+  /* A base ADT for the user interaction without state semantics */
+  sealed abstract class Teletype[A] extends Product with Serializable
+
+  final case class WriteLine(line : String) extends Teletype[Unit]
+
+  final case class ReadLine(prompt : String) extends Teletype[String]
+
+  type TeletypeT[M[_], A] = FreeT[Teletype, M, A]
+
+  type Log = List[String]
+
+  /** Smart constructors, notice we are abstracting over any MonadState instance
+    *  to potentially support other types beside State
+    */
+  class TeletypeOps[M[_]](implicit MS : MonadState[M, Log]) {
+
+    def writeLine(line : String) : TeletypeT[M, Unit] =
+      FreeT.liftF[Teletype, M, Unit](WriteLine(line))
+
+    def readLine(prompt : String) : TeletypeT[M, String] =
+      FreeT.liftF[Teletype, M, String](ReadLine(prompt))
+
+    def log(s : String) : TeletypeT[M, Unit] =
+      FreeT.liftT[Teletype, M, Unit](MS.modify(s :: _))
+  }
+
+  object TeletypeOps {
+    implicit def teleTypeOpsInstance[M[_]](implicit MS : MonadState[M, Log]) : TeletypeOps[M] = new TeletypeOps
+  }
+
+  type TeletypeState[A] = State[List[String], A]
+
+  def program3(implicit TO : TeletypeOps[TeletypeState]) : TeletypeT[TeletypeState, Unit] = {
+    for {
+      userSaid <- TO.readLine("what's up?!")
+      _ <- TO.log(s"user said : $userSaid")
+      _ <- TO.writeLine("thanks, see you soon!")
+    } yield ()
+  }
+
+  def interpreter2 = new (Teletype ~> TeletypeState) {
+    def apply[A](fa : Teletype[A]) : TeletypeState[A] = {
+      fa match {
+        case ReadLine(prompt) =>
+          println(prompt)
+          val userInput = "hanging in here" //scala.io.StdIn.readLine()
+          StateT.pure[Eval, List[String], A](userInput)
+        case WriteLine(line) =>
+          StateT.pure[Eval, List[String], A](println(line))
+      }
+    }
+  }
+
+  val state = program3.foldMap(interpreter2)
+
+  val initialState = Nil
+
+  val (stored, _) = state.run(initialState).value
+
+  assert(stored == List("user said : hanging in here"))
+
+  // Future Work (TODO)
+
+  // There are many remarkable uses of Free[_]. In the future, we will include
+  // some here, such as:
+
+  // - Trampoline
+  // - Option
+  // - Iteratee
+  // - Source
+  // - etc…
+
+  // We will also discuss the Coyoneda Trick.
+
+  // Credits
+
+  // This article was written by Pascal Voitot and edited by other members of
+  // the Cats community.
 }

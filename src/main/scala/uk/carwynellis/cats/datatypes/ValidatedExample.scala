@@ -222,4 +222,194 @@ object ValidatedExample extends App {
   )(ConnectionParams.apply)
 
   assert(v3 == Valid(ConnectionParams("127.0.0.1", 1234)))
+
+  // Apply
+
+  // Our parallelValidate function looks awfully like the Apply#map2 function.
+
+  import scala.language.higherKinds
+
+  def map2[F[_], A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = ???
+
+  // Which can be defined in terms of Apply#ap and Apply#map, the very functions
+  // needed to create an Apply instance.
+
+  // Can we perhaps define an Apply instance for Validated? Better yet, can we
+  // define an Applicative instance?
+
+  // Note: the example below assumes usage of the kind-projector compiler plugin
+  // and will not compile if it is not being used in a project.
+
+  import cats.Applicative
+
+  implicit def validatedApplicative[E : Semigroup]: Applicative[Validated[E, ?]] =
+    new Applicative[Validated[E, ?]] {
+      def ap[A, B](f: Validated[E, A => B])(fa: Validated[E, A]): Validated[E, B] =
+        (fa, f) match {
+          case (Valid(a), Valid(fab)) => Valid(fab(a))
+          case (i@Invalid(_), Valid(_)) => i
+          case (Valid(_), i@Invalid(_)) => i
+          case (Invalid(e1), Invalid(e2)) => Invalid(Semigroup[E].combine(e1, e2))
+        }
+
+      def pure[A](x: A): Validated[E, A] = Validated.valid(x)
+    }
+
+  // Awesome! And now we also get access to all the goodness of Applicative,
+  // which includes map{2-22}, as well as the Cartesian syntax |@|.
+
+  // We can now easily ask for several bits of configuration and get any and all
+  // errors returned back.
+
+  import cats.Apply
+  import cats.data.ValidatedNel
+
+  val personConfig = Config(
+    Map(
+      "name"        -> "cat",
+      "age"         -> "not a number",
+      "houseNumber" -> "1234",
+      "lane"        -> "feline street"
+    )
+  )
+
+  case class Address(houseNumber: Int, street: String)
+  case class Person(name: String, age: Int, address: Address)
+
+  // Thus.
+
+  val personFromConfig: ValidatedNel[ConfigError, Person] =
+    Apply[ValidatedNel[ConfigError, ?]].map4(config.parse[String]("name").toValidatedNel,
+      personConfig.parse[Int]("age").toValidatedNel,
+      personConfig.parse[Int]("house_number").toValidatedNel,
+      personConfig.parse[String]("street").toValidatedNel) {
+      case (name, age, houseNumber, street) => Person(name, age, Address(houseNumber, street))
+    }
+
+  assert(personFromConfig == Invalid(
+    NonEmptyList.of(
+      MissingConfig("street"),
+      MissingConfig("house_number"),
+      ParseError("age"),
+      MissingConfig("name")
+    )
+  ))
+
+  // Of flatMaps and Eithers
+
+  // Option has flatMap, Either has flatMap, where’s Validated’s? Let’s try to
+  // implement it - better yet, let’s implement the Monad type class.
+
+  {
+    import cats.Monad
+
+    implicit def validatedMonad[E]: Monad[Validated[E, ?]] =
+      new Monad[Validated[E, ?]] {
+        def flatMap[A, B](fa: Validated[E, A])(f: A => Validated[E, B]): Validated[E, B] =
+          fa match {
+            case Valid(a)     => f(a)
+            case i@Invalid(_) => i
+          }
+
+        def pure[A](x: A): Validated[E, A] = Valid(x)
+
+        @annotation.tailrec
+        def tailRecM[A, B](a: A)(f: A => Validated[E, Either[A, B]]): Validated[E, B] =
+          f(a) match {
+            case Valid(Right(b)) => Valid(b)
+            case Valid(Left(a)) => tailRecM(a)(f)
+            case i@Invalid(_) => i
+          }
+      }
+
+    // Note that all Monad instances are also Applicative instances, where ap is
+    // defined as
+
+    /**
+      trait Monad[F[_]] {
+        def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
+
+        def pure[A](x: A): F[A]
+
+        def map[A, B](fa: F[A])(f: A => B): F[B] =
+          flatMap(fa)(f.andThen(pure))
+
+      def ap[A, B](fa: F[A])(f: F[A => B]): F[B] =
+        flatMap(fa)(a => map(f)(fab => fab(a)))
+    }
+    **/
+
+    // However, the ap behavior defined in terms of flatMap does not behave the
+    // same as that of our ap defined above. Observe:
+
+    val v = validatedMonad.tuple2(
+      Validated.invalidNel[String, Int]("oops"),
+      Validated.invalidNel[String, Double]("uh oh")
+    )
+
+    assert(v == Invalid(NonEmptyList.of("oops")))
+
+    // This one short circuits! Therefore, if we were to define a Monad (or
+    // FlatMap) instance for Validated we would have to override ap to get the
+    // behavior we want. But then the behavior of flatMap would be inconsistent
+    // with that of ap, not good. Therefore, Validated has only an Applicative
+    // instance.
+  }
+
+  // Validated vs Either
+
+  // We’ve established that an error-accumulating data type such as Validated
+  // can’t have a valid Monad instance. Sometimes the task at hand requires
+  // error-accumulation. However, sometimes we want a monadic structure that we
+  // can use for sequential validation (such as in a for-comprehension). This
+  // leaves us in a bit of a conundrum.
+
+  // Cats has decided to solve this problem by using separate data structures
+  // for error-accumulation (Validated) and short-circuiting monadic behavior
+  // (Either).
+
+  // If you are trying to decide whether you want to use Validated or Either, a
+  // simple heuristic is to use Validated if you want error-accumulation and to
+  // otherwise use Either.
+
+  // Sequential Validation
+
+  // If you do want error accumulation but occasionally run into places where
+  // sequential validation is needed, then Validated provides a couple methods
+  // that may be helpful.
+
+  // andThen
+
+  // The andThen method is similar to flatMap (such as Either.flatMap). In the
+  // case of success, it passes the valid value into a function that returns a
+  // new Validated instance.
+
+  val houseNumber = config.parse[Int]("house_number").andThen{ n =>
+    if (n >= 0) Validated.valid(n)
+    else Validated.invalid(ParseError("house_number"))
+  }
+
+  assert(houseNumber == Invalid(MissingConfig("house_number")))
+
+  // withEither
+
+  // The withEither method allows you to temporarily turn a Validated instance
+  // into an Either instance and apply it to a function.
+
+  import cats.syntax.either._ // get Either#flatMap
+
+  def positive(field: String, i: Int): Either[ConfigError, Int] = {
+    if (i >= 0) Right(i)
+    else Left(ParseError(field))
+  }
+
+  // Thus.
+
+  val houseNumber2 = config.parse[Int]("house_number").withEither{ either: Either[ConfigError, Int] =>
+    either.flatMap{ i =>
+      positive("house_number", i)
+    }
+  }
+
+  assert(houseNumber2 == Invalid(MissingConfig("house_number")))
 }

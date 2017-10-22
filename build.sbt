@@ -4,10 +4,10 @@ version := "1.0"
 
 scalaVersion := "2.12.4"
 
-val catsVersion = "0.8.1"
+val catsVersion = "1.0.0-MF"
 
 libraryDependencies ++= Seq(
-    "org.typelevel" %% "cats"      % catsVersion,
+    "org.typelevel" %% "cats-core" % catsVersion,
     "org.typelevel" %% "cats-free" % catsVersion
 )
 
@@ -22,7 +22,8 @@ scalacOptions ++= Seq(
   "-feature",               // Emit warnings where feature needs explicit import
   "-unchecked",             // Emit warnings related to type erasure
   "-Ywarn-unused:imports",  // Warn on unused imports
-  "-Xfatal-warnings"        // Make warnings fatal
+  "-Xfatal-warnings",       // Make warnings fatal
+  "-Ypartial-unification"   // Improve type constructor inference - see SI-2712
 )
 
 // Filter options that don't play well with the scala console.

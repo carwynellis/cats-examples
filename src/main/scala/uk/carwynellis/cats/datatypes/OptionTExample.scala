@@ -1,6 +1,5 @@
 package uk.carwynellis.cats.datatypes
 
-import cats._
 import cats.implicits._
 import cats.data.OptionT
 

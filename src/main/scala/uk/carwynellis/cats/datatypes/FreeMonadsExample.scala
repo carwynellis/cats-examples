@@ -155,7 +155,6 @@ object FreeMonadsExample extends App {
   // In our case, we will use a simple mutable map to represent our key value
   // store:
 
-  import cats.arrow.FunctionK
   import cats.{Id, ~>}
   import scala.collection.mutable
 

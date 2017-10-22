@@ -176,7 +176,6 @@ object ValidatedExample extends App {
 
   import cats.SemigroupK
   import cats.data.NonEmptyList
-  import cats.implicits._
 
   case class ConnectionParams(endpoint: String, port: Int)
 
@@ -395,8 +394,6 @@ object ValidatedExample extends App {
 
   // The withEither method allows you to temporarily turn a Validated instance
   // into an Either instance and apply it to a function.
-
-  import cats.syntax.either._ // get Either#flatMap
 
   def positive(field: String, i: Int): Either[ConfigError, Int] = {
     if (i >= 0) Right(i)

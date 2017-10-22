@@ -55,7 +55,6 @@ object FreeApplicativesExample extends App {
   // has happened at this point. To make our program useful we need to interpret
   // it.
 
-  import cats.Id
   import cats.arrow.FunctionK
 
   // a function that takes a string as input

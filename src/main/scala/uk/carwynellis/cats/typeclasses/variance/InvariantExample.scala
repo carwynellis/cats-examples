@@ -1,6 +1,5 @@
 package uk.carwynellis.cats.typeclasses.variance
 
-import java.time.Instant
 import java.util.Date
 
 import cats._

@@ -7,8 +7,8 @@ scalaVersion := "2.12.4"
 val catsVersion = "1.0.0-MF"
 
 libraryDependencies ++= Seq(
-    "org.typelevel" %% "cats-core" % catsVersion,
-    "org.typelevel" %% "cats-free" % catsVersion
+    "org.typelevel" %% "cats-core"   % catsVersion,
+    "org.typelevel" %% "cats-free"   % catsVersion
 )
 
 resolvers += Resolver.sonatypeRepo("releases")

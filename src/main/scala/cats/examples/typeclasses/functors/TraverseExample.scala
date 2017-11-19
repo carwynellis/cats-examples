@@ -59,11 +59,6 @@ object TraverseExample extends App {
   // The type signature of traverse is very abstract. What traverse does as it
   // walks the F[A] depends on the function being applied.
 
-  // Some examples, using the traverseU which provides some type-level trickery
-  // to help scalac infer the correct types for data types that do not easily
-  // satisfy the F[_] shape required by the applicative.
-  // See http://typelevel.org/blog/2013/09/11/using-scalaz-Unapply.html
-
   def parseIntEither(s: String): Either[NumberFormatException, Int] =
   // catchOnly is provided by cats implicits and is implemented in
   // EitherObjectOps.
@@ -72,10 +67,10 @@ object TraverseExample extends App {
   def parseIntValidated(s: String): ValidatedNel[NumberFormatException, Int] =
     Validated.catchOnly[NumberFormatException](s.toInt).toValidatedNel
 
-  assert(List("1", "2", "3").traverseU(parseIntEither) == Right(List(1, 2, 3)))
+  assert(List("1", "2", "3").traverse(parseIntEither) == Right(List(1, 2, 3)))
 
   // The entire traversal is failed at the point the exception is thrown...
-  List("1", "foo!", "3").traverseU(parseIntEither) match {
+  List("1", "foo!", "3").traverse(parseIntEither) match {
     case Left(e) =>
       assert(e.getMessage == "For input string: \"foo!\"")
     case _ => ???
@@ -83,7 +78,7 @@ object TraverseExample extends App {
 
   // ...which is highlighted in the following exception where the exception
   // string still refers to the first failure.
-  List("1", "foo!", "bar").traverseU(parseIntEither) match {
+  List("1", "foo!", "bar").traverse(parseIntEither) match {
     case Left(e) =>
       assert(e.getMessage == "For input string: \"foo!\"")
     case _ => ???
@@ -91,17 +86,17 @@ object TraverseExample extends App {
 
   // For the Validated type traversal will continue on error, with any errors
   // accumulated in the result.
-  assert(List("1", "2", "3").traverseU(parseIntValidated) == Valid(List(1, 2, 3)))
+  assert(List("1", "2", "3").traverse(parseIntValidated) == Valid(List(1, 2, 3)))
 
   // The following generates a single error caused by second value.
-  List("1", "foo!", "3").traverseU(parseIntValidated) match {
+  List("1", "foo!", "3").traverse(parseIntValidated) match {
     case Invalid(l) => assert(l.size == 1)
     case _ => ???
   }
 
   // The following generates two errors caused by the second and third values.
   // The following generates a single error caused by second value.
-  List("1", "foo!", "bar").traverseU(parseIntValidated) match {
+  List("1", "foo!", "bar").traverse(parseIntValidated) match {
     case Invalid(l) => assert(l.size == 2)
     case _ => ???
   }

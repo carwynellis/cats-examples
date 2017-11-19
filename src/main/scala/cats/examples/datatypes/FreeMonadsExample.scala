@@ -268,9 +268,9 @@ object FreeMonadsExample extends App {
   // Let’s see a trivial example of unrelated ADT’s getting composed as a
   // Coproduct that can form a more complex program.
 
-  import cats.data.Coproduct
-  import cats.free.{Inject, Free}
-  import cats.{Id, ~>}
+  import cats.data.EitherK
+  import cats.free.Free
+  import cats.{Id, InjectK, ~>}
   import scala.collection.mutable.ListBuffer
 
   // Handles user interaction
@@ -286,29 +286,29 @@ object FreeMonadsExample extends App {
   // Once the ADTs are defined we can formally state that a Free program is the
   // Coproduct of it’s Algebras.
 
-  type CatsApp[A] = Coproduct[DataOp, Interact, A]
+  type CatsApp[A] = EitherK[DataOp, Interact, A]
 
   // In order to take advantage of monadic composition we use smart constructors
   // to lift our Algebra to the Free context.
 
   import scala.language.higherKinds
 
-  class Interacts[F[_]](implicit I: Inject[Interact, F]) {
+  class Interacts[F[_]](implicit I: InjectK[Interact, F]) {
     def tell(msg: String): Free[F, Unit] = Free.inject[Interact, F](Tell(msg))
     def ask(prompt: String): Free[F, String] = Free.inject[Interact, F](Ask(prompt))
   }
 
   object Interacts {
-    implicit def interacts[F[_]](implicit I: Inject[Interact, F]): Interacts[F] = new Interacts[F]
+    implicit def interacts[F[_]](implicit I: InjectK[Interact, F]): Interacts[F] = new Interacts[F]
   }
 
-  class DataSource[F[_]](implicit I: Inject[DataOp, F]) {
+  class DataSource[F[_]](implicit I: InjectK[DataOp, F]) {
     def addCat(a: String): Free[F, Unit] = Free.inject[DataOp, F](AddCat(a))
     def getAllCats: Free[F, List[String]] = Free.inject[DataOp, F](GetAllCats())
   }
 
   object DataSource {
-    implicit def dataSource[F[_]](implicit I: Inject[DataOp, F]): DataSource[F] = new DataSource[F]
+    implicit def dataSource[F[_]](implicit I: InjectK[DataOp, F]): DataSource[F] = new DataSource[F]
   }
 
   // ADTs are now easily composed and trivially intertwined inside monadic
@@ -475,32 +475,28 @@ object FreeMonadsExample extends App {
 
   type Log = List[String]
 
+  type TeletypeState[A] = State[List[String], A]
+
   /** Smart constructors, notice we are abstracting over any MonadState instance
     *  to potentially support other types beside State
     */
-  class TeletypeOps[M[_]](implicit MS : MonadState[M, Log]) {
-
-    def writeLine(line : String) : TeletypeT[M, Unit] =
-      FreeT.liftF[Teletype, M, Unit](WriteLine(line))
-
-    def readLine(prompt : String) : TeletypeT[M, String] =
-      FreeT.liftF[Teletype, M, String](ReadLine(prompt))
-
-    def log(s : String) : TeletypeT[M, Unit] =
-      FreeT.liftT[Teletype, M, Unit](MS.modify(s :: _))
-  }
-
   object TeletypeOps {
-    implicit def teleTypeOpsInstance[M[_]](implicit MS : MonadState[M, Log]) : TeletypeOps[M] = new TeletypeOps
+
+    def writeLine(line : String) : TeletypeT[TeletypeState, Unit] =
+      FreeT.liftF[Teletype, TeletypeState, Unit](WriteLine(line))
+
+    def readLine(prompt : String) : TeletypeT[TeletypeState, String] =
+      FreeT.liftF[Teletype, TeletypeState, String](ReadLine(prompt))
+
+    def log(s : String) : TeletypeT[TeletypeState, Unit] =
+      FreeT.liftT[Teletype, TeletypeState, Unit](State.modify(s :: _))
   }
 
-  type TeletypeState[A] = State[List[String], A]
-
-  def program3(implicit TO : TeletypeOps[TeletypeState]) : TeletypeT[TeletypeState, Unit] = {
+  def program3: TeletypeT[TeletypeState, Unit] = {
     for {
-      userSaid <- TO.readLine("what's up?!")
-      _ <- TO.log(s"user said : $userSaid")
-      _ <- TO.writeLine("thanks, see you soon!")
+      userSaid <- TeletypeOps.readLine("what's up?!")
+      _ <- TeletypeOps.log(s"user said : $userSaid")
+      _ <- TeletypeOps.writeLine("thanks, see you soon!")
     } yield ()
   }
 

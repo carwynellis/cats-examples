@@ -47,9 +47,7 @@ object FreeApplicativesExample extends App {
 
   import cats.implicits._
 
-  val prog: Validation[Boolean] = (size(5) |@| hasNumber).map {
-    case (l, r) => l && r
-  }
+  val prog: Validation[Boolean] = (size(5), hasNumber).mapN { case (l, r) => l && r}
 
   // As it stands, our program is just an instance of a data structure - nothing
   // has happened at this point. To make our program useful we need to interpret
@@ -60,28 +58,13 @@ object FreeApplicativesExample extends App {
   // a function that takes a string as input
   type FromString[A] = String => A
 
-  // The following relies on Polymorphic Lambda values provided by the kind
-  // projector plugin.
-  // See - https://github.com/non/kind-projector/#polymorphic-lambda-values
-  val compiler =
-    λ[FunctionK[ValidationOp, FromString]] { fa =>
-      str =>
-        fa match {
-          case Size(size) => str.size >= size
-          case HasNumber  => str.exists(c => "0123456789".contains(c))
-        }
-    }
-
-  // Note that this can be expressed without this feature as follows
-  val compiler2 = new FunctionK[ValidationOp, FromString] {
+  val compiler = new FunctionK[ValidationOp, FromString] {
     def apply[A](fa: ValidationOp[A]): FromString[A] = str =>
       fa match {
         case Size(size) => str.size >= size
         case HasNumber  => str.exists(c => "0123456789".contains(c))
       }
   }
-
-  // See https://github.com/typelevel/cats/issues/1471
 
   val validator = prog.foldMap[FromString](compiler)
 
@@ -120,15 +103,14 @@ object FreeApplicativesExample extends App {
   // recall Kleisli[Future, String, A] is the same as String => Future[A]
   type ParValidator[A] = Kleisli[Future, String, A]
 
-  val parCompiler =
-    λ[FunctionK[ValidationOp, ParValidator]] { fa =>
-      Kleisli { str =>
-        fa match {
-          case Size(size) => Future { str.size >= size }
-          case HasNumber  => Future { str.exists(c => "0123456789".contains(c)) }
-        }
+  val parCompiler = new FunctionK[ValidationOp, ParValidator] {
+    def apply[A](fa: ValidationOp[A]): ParValidator[A] = Kleisli { str =>
+      fa match {
+        case Size(size) => Future { str.size >= size }
+        case HasNumber => Future { str.exists(c => "0123456789".contains(c)) }
       }
     }
+  }
 
   val parValidator = prog.foldMap[ParValidator](parCompiler)
 
@@ -170,9 +152,9 @@ object FreeApplicativesExample extends App {
   )
 
   assert(
-    logValidation((hasNumber |@| size(3)).map(_ || _)) == List(
-      "has number",
-      "size >= 3"
+    logValidation((hasNumber, size(3)).mapN(_ || _)) == List(
+    "has number",
+    "size >= 3"
     )
   )
 
@@ -188,21 +170,12 @@ object FreeApplicativesExample extends App {
   // Therefore, we can write an interpreter that uses the product of the
   // ParValidator and Log Applicatives to interpret our program in one go.
 
-  import cats.data.Prod
+  import cats.data.Tuple2K
 
-  type ValidateAndLog[A] = Prod[ParValidator, Log, A]
+  type ValidateAndLog[A] = Tuple2K[ParValidator, Log, A]
 
-  val prodCompiler =
-    λ[FunctionK[ValidationOp, ValidateAndLog]] {
-      case Size(size) =>
-        val f: ParValidator[Boolean] = Kleisli(str => Future { str.size >= size })
-        val l: Log[Boolean] = Const(List(s"size > $size"))
-        Prod[ParValidator, Log, Boolean](f, l)
-      case HasNumber  =>
-        val f: ParValidator[Boolean] = Kleisli(str => Future(str.exists(c => "0123456789".contains(c))))
-        val l: Log[Boolean] = Const(List("has number"))
-        Prod[ParValidator, Log, Boolean](f, l)
-    }
+  val prodCompiler: FunctionK[ValidationOp, ValidateAndLog] = parCompiler and logCompiler
 
   val prodValidation = prog.foldMap[ValidateAndLog](prodCompiler)
+
 }

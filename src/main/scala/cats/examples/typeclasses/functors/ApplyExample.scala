@@ -2,7 +2,6 @@ package cats.examples.typeclasses.functors
 
 import cats._
 import cats.data.Nested
-import cats.syntax.cartesian._
 
 import language.postfixOps
 
@@ -99,22 +98,4 @@ object ApplyExample extends App {
   assert(Apply[Option].tuple2(Some(1), Some(2)) contains (1,2))
 
   assert(Apply[Option].tuple3(Some(1), Some(2), Some(3)) contains (1,2,3))
-
-  // Apply also provides a builder syntax, for higher arity functions, via the
-  // |@| operator. This relies on importing cats.syntax.all._ or
-  // cats.syntax.cartesian._
-  // The following example compares the builder syntax with using a specific
-  // arity function, in this case map3.
-
-  // f1 is a function with arity 3...
-  def f1(a: Option[Int], b: Option[Int], c: Option[Int]) =
-    (a |@| b |@| c) map { _ * _ * _ }
-  // which is equivalent to invoking map3 directly...
-  def f2(a: Option[Int], b: Option[Int], c: Option[Int]) =
-    Apply[Option].map3(a, b, c) { _ * _ * _ }
-
-  assert(f1(Some(1), Some(2), Some(3)) == f2(Some(1), Some(2), Some(3)))
-
-  // All instances created using |@| have ap, map and tupled methods of the
-  // appropriate arity. For example f1 above has functions of arity 3.
 }

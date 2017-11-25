@@ -63,15 +63,15 @@ object FoldableExample extends App {
     }.value contains "321"
   )
 
-  assert(Foldable[Set].find(Set(1,2,3))(_ > 2) contains 3)
+  assert(Foldable[List].find(List(1,2,3))(_ > 2) contains 3)
 
-  assert(Foldable[Set].exists(Set(1,2,3))(_ > 2))
+  assert(Foldable[List].exists(List(1,2,3))(_ > 2))
 
-  assert(! Foldable[Set].forall(Set(1,2,3))(_ > 2))
+  assert(! Foldable[List].forall(List(1,2,3))(_ > 2))
 
-  assert(Foldable[Set].forall(Set(1,2,3))(_ < 4))
+  assert(Foldable[List].forall(List(1,2,3))(_ < 4))
 
-  assert(Foldable[Vector].filter_(Vector(1,2,3))(_ < 3) == List(1,2))
+  assert(Foldable[List].filter_(List(1,2,3))(_ < 3) == List(1,2))
 
   assert(! Foldable[List].isEmpty(List(1,2,3)))
 

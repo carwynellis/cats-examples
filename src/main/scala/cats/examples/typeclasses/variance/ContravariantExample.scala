@@ -1,7 +1,6 @@
 package cats.examples.typeclasses.variance
 
 import cats._
-import cats.functor._
 import cats.implicits._
 
 import scala.math.Ordered._

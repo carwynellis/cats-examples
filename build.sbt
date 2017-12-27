@@ -4,7 +4,7 @@ version := "1.0"
 
 scalaVersion := "2.12.4"
 
-val catsVersion = "1.0.0-RC1"
+val catsVersion = "1.0.0"
 
 libraryDependencies ++= Seq(
     "org.typelevel" %% "cats-core"   % catsVersion,

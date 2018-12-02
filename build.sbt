@@ -2,9 +2,9 @@ name := "cats-examples"
 
 version := "1.0"
 
-scalaVersion := "2.12.4"
+scalaVersion := "2.12.7"
 
-val catsVersion = "1.1.0"
+val catsVersion = "1.5.0"
 
 libraryDependencies ++= Seq(
     "org.typelevel" %% "cats-core"   % catsVersion,

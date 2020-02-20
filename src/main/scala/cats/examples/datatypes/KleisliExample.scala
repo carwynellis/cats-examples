@@ -1,7 +1,5 @@
 package cats.examples.datatypes
 
-import scala.language.higherKinds
-
 /**
   * Kleisli enables composition of functions that return a monadic value, for
   * instance an Option[Int] or a Either[String, List[Double]], without having

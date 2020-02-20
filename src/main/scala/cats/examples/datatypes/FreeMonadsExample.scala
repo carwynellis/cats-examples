@@ -291,8 +291,6 @@ object FreeMonadsExample extends App {
   // In order to take advantage of monadic composition we use smart constructors
   // to lift our Algebra to the Free context.
 
-  import scala.language.higherKinds
-
   class Interacts[F[_]](implicit I: InjectK[Interact, F]) {
     def tell(msg: String): Free[F, Unit] = Free.inject[Interact, F](Tell(msg))
     def ask(prompt: String): Free[F, String] = Free.inject[Interact, F](Ask(prompt))

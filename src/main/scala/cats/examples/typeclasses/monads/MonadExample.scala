@@ -4,7 +4,6 @@ import cats._
 import cats.implicits._
 
 import scala.annotation.tailrec
-import scala.language.higherKinds
 
 /**
   * Monad extends the Applicative type class with a new function, flatten.

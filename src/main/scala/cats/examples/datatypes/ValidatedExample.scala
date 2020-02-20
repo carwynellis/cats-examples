@@ -226,8 +226,6 @@ object ValidatedExample extends App {
 
   // Our parallelValidate function looks awfully like the Apply#map2 function.
 
-  import scala.language.higherKinds
-
   def map2[F[_], A, B, C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C] = ???
 
   // Which can be defined in terms of Apply#ap and Apply#map, the very functions

@@ -2,9 +2,9 @@ name := "cats-examples"
 
 version := "1.0"
 
-scalaVersion := "2.12.7"
+scalaVersion := "2.13.1"
 
-val catsVersion = "1.5.0"
+val catsVersion = "2.0.0"
 
 libraryDependencies ++= Seq(
     "org.typelevel" %% "cats-core"   % catsVersion,
@@ -13,7 +13,7 @@ libraryDependencies ++= Seq(
 
 resolvers += Resolver.sonatypeRepo("releases")
 
-addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.3")
+addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.11.0" cross CrossVersion.full)
 
 scalacOptions ++= Seq(
   "-target:jvm-1.8",        // Target Java 8
@@ -21,9 +21,9 @@ scalacOptions ++= Seq(
   "-deprecation",           // Emit deprecation warnings
   "-feature",               // Emit warnings where feature needs explicit import
   "-unchecked",             // Emit warnings related to type erasure
-  "-Ywarn-unused:imports",  // Warn on unused imports
-  "-Xfatal-warnings",       // Make warnings fatal
-  "-Ypartial-unification"   // Improve type constructor inference - see SI-2712
+  "-Ywarn-unused:imports"  // Warn on unused imports
+// TODO - enable this once examples have been updated to remove deprecation warnings
+//  "-Xfatal-warnings"        // Make warnings fatal
 )
 
 // Filter options that don't play well with the scala console.

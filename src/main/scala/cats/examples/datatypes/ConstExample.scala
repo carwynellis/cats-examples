@@ -4,8 +4,6 @@ import cats._
 import cats.data.Const
 import cats.implicits._
 
-import scala.language.higherKinds
-
 /**
   * At first glance, Const seems like a strange data type. It has two type
   * parameters, yet only stores values of the first type. What possible use is

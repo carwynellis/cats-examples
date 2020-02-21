@@ -21,9 +21,8 @@ scalacOptions ++= Seq(
   "-deprecation",           // Emit deprecation warnings
   "-feature",               // Emit warnings where feature needs explicit import
   "-unchecked",             // Emit warnings related to type erasure
-  "-Ywarn-unused:imports"  // Warn on unused imports
-// TODO - enable this once examples have been updated to remove deprecation warnings
-//  "-Xfatal-warnings"        // Make warnings fatal
+  "-Ywarn-unused:imports",  // Warn on unused imports
+  "-Xfatal-warnings"        // Make warnings fatal
 )
 
 // Filter options that don't play well with the scala console.

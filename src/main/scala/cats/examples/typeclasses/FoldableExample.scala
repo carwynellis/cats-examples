@@ -132,7 +132,7 @@ object FoldableExample extends App {
 
   // For example consider the following infinite stream of false values
 
-  val allFalse = Stream.continually(false)
+  val allFalse = LazyList.continually(false)
 
   // If we wanted to reduce this stream into a single false value using the
   // logical &&, we know that we do not need to consider the entire stream to
@@ -152,7 +152,7 @@ object FoldableExample extends App {
   // examining only the first value.
 
   assert(
-    Foldable[Stream].foldRight(allFalse, Eval.True) { (a,b) =>
+    Foldable[LazyList].foldRight(allFalse, Eval.True) { (a,b) =>
       if (a) b
       else Eval.now(false)
     }.value == false

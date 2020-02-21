@@ -20,5 +20,5 @@ object OneAndExample extends App {
   // the higher kinded type parameter F[_], OneAnd is also able to represent
   // other “non-empty” data structures e.g.
 
-  type NonEmptyStream[A] = OneAnd[Stream, A]
+  type NonEmptyLazyList[A] = OneAnd[LazyList, A]
 }

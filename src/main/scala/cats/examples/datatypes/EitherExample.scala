@@ -47,28 +47,16 @@ object EitherExample extends App {
   // to short-circuit a computation upon the first error. For more information,
   // see the Validated vs Either section of the Validated documentation.
 
-  // Syntax
-
-  // In Scala 2.10.x and 2.11.x, Either is unbiased. That is, usual combinators
-  // like flatMap and map are missing from it. Instead, you call .right or .left
-  // to get a RightProjection or LeftProjection (respectively) which does have
-  // the combinators. The direction of the projection indicates the direction of
-  // bias. For instance, calling map on a RightProjection acts on the Right of
-  // an Either.
-
   val e1: Either[String, Int] = Right(5)
 
-  assert(e1.right.map(_ + 1) == Right(6))
+  assert(e1.map(_ + 1) == Right(6))
 
   val e2: Either[String, Int] = Left("Hello")
 
-  assert(e2.right.map(_ + 1) == Left("Hello"))
+  assert(e2.map(_ + 1) == Left("Hello"))
 
-  // Note the return types are themselves back to Either, so if we want to make
-  // more calls to flatMap or map then we again must call right or left.
-
-  // However, the convention is almost always to right-bias Either. Indeed in
-  // Scala 2.12.x Either is right-biased by default.
+  // By convention Either is right-biased. Indeed in Scala 2.12.x Either is
+  // right-biased by default.
 
   // More often than not we want to just bias towards one side and call it a day
   // - by convention, the right side is most often chosen. In Scala 2.12.x this
@@ -94,7 +82,8 @@ object EitherExample extends App {
   // for it. Since we only ever want the computation to continue in the case of
   // Right, we fix the left type parameter and leave the right one free.
 
-  // Note: the example below assumes usage of the kind-projector compiler plugin and will not compile if it is not being used in a project.
+  // Note: the example below assumes usage of the kind-projector compiler plugin
+  // and will not compile if it is not being used in a project.
 
   import cats.Monad
 
